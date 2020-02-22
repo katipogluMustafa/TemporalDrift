@@ -1,2 +1,4 @@
 # RecSysEvaluator
-Recommendation System Evaluator
+
+GUI Recommendation System Evaluator
+
