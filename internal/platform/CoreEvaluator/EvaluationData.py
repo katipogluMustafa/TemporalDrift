@@ -10,6 +10,9 @@ Updated on Tue March  5 06:43:17 2020
 from surprise.model_selection import train_test_split
 from surprise.model_selection import LeaveOneOut
 from surprise import KNNBaseline
+from surprise import trainset
+from surprise.prediction_algorithms import algo_base
+from collections import defaultdict
 
 class EvaluationData:
 
@@ -38,13 +41,13 @@ class EvaluationData:
         self.sims_algo = KNNBaseline(sim_options=sim_options)
         self.sims_algo.fit(self.full_train_set)
 
-    def get_full_train_set(self):
+    def get_full_train_set(self) -> trainset:
         return self.full_train_set
 
-    def get_full_anti_test_set(self):
+    def get_full_anti_test_set(self) -> list:
         return self.full_anti_test_set
 
-    def get_anti_test_set_for_user(self, test_subject):
+    def get_anti_test_set_for_user(self, test_subject) -> list:
         train_set = self.full_train_set
         fill = train_set.global_mean
         anti_test_set = []
@@ -57,24 +60,25 @@ class EvaluationData:
                          ]
         return anti_test_set
 
-    def get_train_set(self):
+    def get_train_set(self) -> trainset:
         return self.train_set
 
-    def get_test_set(self):
+    def get_test_set(self) -> list:
         return self.test_set
 
-    def get_loocv_train_set(self):
+    def get_loocv_train_set(self) -> trainset:
+        """ Train set of Leave One Out Cross Validation """
         return self.loocv_train
 
-    def get_loocv_test_set(self):
+    def get_loocv_test_set(self) -> list:
         return self.loocv_test
 
-    def get_loocv_anti_test_set(self):
+    def get_loocv_anti_test_set(self) -> list:
         return self.loocv_anti_test_set
 
-    def get_similarities(self):
+    def get_similarities(self) -> algo_base:
         return self.sims_algo
 
-    def get_popularity_rankings(self):
+    def get_popularity_rankings(self) -> defaultdict:
         return self.popularity_rankings
 
