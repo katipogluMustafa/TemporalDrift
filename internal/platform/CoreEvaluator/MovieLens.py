@@ -68,6 +68,26 @@ class MovieLens:
 
         return user_ratings
 
+    def get_popularity_ranks(self):
+        """
+        Calculates popularity ranks
+        :return: A default dict of ranks user_id -> rank
+        """
+        ratings = defaultdict(int)
+        rankings = defaultdict(int)
+        with open(self.ratings_path, newline='') as csvfile:
+            rating_reader = csv.reader(csvfile)
+            next(rating_reader)   # Skip header line
+            for row in rating_reader:
+                movie_id = int(row[1])
+                ratings[movie_id] +=1
+        rank = 1
+        for movie_id, rating_count in sorted(ratings.items(),key=lambda x: x[1], reverse=True):
+            rankings[movie_id] = rank
+            rank += 1
+
+        return rankings
+
     def get_genres(self):
         """
             Returns a default dict
