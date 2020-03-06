@@ -1,9 +1,5 @@
-import itertools
-import os
 import pandas as pd
 
-from surprise import Reader
-from surprise import trainset
 class Dataset:
     """
         One should call load_ratings in order ratings to be loaded into the Dataset
