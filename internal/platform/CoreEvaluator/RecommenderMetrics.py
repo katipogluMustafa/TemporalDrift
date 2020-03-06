@@ -84,6 +84,8 @@ class RecommenderMetrics: #TODO: Update Docs
             if hit :
                 hit += 1
 
+            total += 1
+
         return hits / total
 
 

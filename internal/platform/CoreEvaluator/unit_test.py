@@ -21,9 +21,9 @@ def load_movielens_data():
     data = ml.load_movielens_latest_small()
 
     print("\nComputing movie popularity ranks so wen measure novelty...")
-    rankings = ml.get_popularity_ranks()
+    ranks = ml.get_popularity_ranks()
 
-    return data, rankings
+    return data, ranks
 
 np.random.seed(0)
 random.seed(0)

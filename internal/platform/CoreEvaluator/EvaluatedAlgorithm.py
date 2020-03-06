@@ -9,10 +9,11 @@ Updated on Tue March  5 07:13:25 2020
 
 from internal.platform.CoreEvaluator.RecommenderMetrics import RecommenderMetrics as rm
 from internal.platform.CoreEvaluator.EvaluationData import EvaluationData
+from surprise.prediction_algorithms import algo_base
 
 class EvaluatedAlgorithm:
 
-    def __init__(self, algorithm, name):
+    def __init__(self, algorithm:algo_base, name):
         self.algorithm = algorithm
         self.name = name
 
@@ -74,11 +75,12 @@ class EvaluatedAlgorithm:
                                                 evaluation_data.get_similarities())
 
             # Measure novelty (average popularity rank of recommendations):
-            metrics["Novelty"] = rm.novelty(top_n_predicted, evaluation_data.get_popularity_rankings)
+            metrics["Novelty"] = rm.novelty(top_n_predicted, evaluation_data.get_popularity_rankings())
 
         if verbose :
             print("Analysis complete.")
 
+        return metrics
 
 
     def get_name(self):

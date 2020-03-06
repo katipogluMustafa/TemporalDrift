@@ -7,9 +7,9 @@ Updated on Tue March  4 12:14:25 2020
 @Style: Google Python Style
 """
 
-from internal.platform.CoreEvaluator import EvaluationData
-from internal.platform.CoreEvaluator import EvaluatedAlgorithm
-
+from internal.platform.CoreEvaluator.EvaluationData import EvaluationData
+from internal.platform.CoreEvaluator.EvaluatedAlgorithm import EvaluatedAlgorithm
+from surprise.prediction_algorithms import algo_base
 class Evaluator:
 
     algorithms = []
@@ -18,7 +18,7 @@ class Evaluator:
         evaluation_data = EvaluationData(dataset, rankings)
         self.dataset = evaluation_data
 
-    def add_algorithm(self, algorithm, name):
+    def add_algorithm(self, algorithm:algo_base, name):
         alg = EvaluatedAlgorithm(algorithm, name)
         self.algorithms.append(alg)
 
@@ -26,7 +26,7 @@ class Evaluator:
         results = {}
         for algorithm in self.algorithms:
             print("Evaluating ", algorithm.get_name(), "...")
-            results[algorithm.get_name()] = algorithm.Evaluate(self.dataset, do_top_n)
+            results[algorithm.get_name()] = algorithm.evaluate(self.dataset, do_top_n)
 
         Evaluator.print_evaluation_results(results, do_top_n)
 
