@@ -13,11 +13,15 @@ class Cache:
                  is_user_movie_matrix_cached=False,
                  user_movie_matrix=None,
                  is_user_correlations_cached=False,
-                 user_correlations=None):
+                 user_correlations=None,
+                 use_avg_ratings_cache=True):
         """ Cached data is only valid when the boolean specifier is True """
+
+        # 30% performance
         self.is_ratings_cached = is_ratings_cached
         self.ratings = ratings
 
+        # 7 fold performance gain on 'movie' related queries
         self.is_movies_cached = is_movies_cached
         self.movies = movies
 
@@ -29,6 +33,20 @@ class Cache:
 
         self.is_user_correlations_cached = is_user_correlations_cached
         self.user_correlations = user_correlations
+
+        # if use avg ratings cache, on average 10 fold performance gain
+        self.use_avg_ratings_cache = use_avg_ratings_cache
+        if self.use_avg_ratings_cache:
+            self.avg_user_ratings = self.create_user_avg_rating_cache()
+        else:
+            self.avg_user_ratings = None
+
+    def create_user_avg_rating_cache(self):
+        if self.is_ratings_cached:
+            data = self.ratings
+        else:
+            data = self.movie_ratings
+        return data.groupby('user_id')[['rating']].mean()
 
     # Properties
     @property
