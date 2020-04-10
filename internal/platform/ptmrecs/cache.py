@@ -1,4 +1,4 @@
-from constraints import TimeConstraint
+from .constraints import TimeConstraint
 
 
 class Cache:
@@ -14,6 +14,7 @@ class Cache:
                  user_movie_matrix=None,
                  is_user_correlations_cached=False,
                  user_correlations=None,
+                 min_common_elements=5,
                  use_avg_ratings_cache=True):
         """ Cached data is only valid when the boolean specifier is True """
 
@@ -33,6 +34,8 @@ class Cache:
 
         self.is_user_correlations_cached = is_user_correlations_cached
         self.user_correlations = user_correlations
+
+        self.min_common_elements = min_common_elements
 
         # if use avg ratings cache, on average 10 fold performance gain
         self.use_avg_ratings_cache = use_avg_ratings_cache
@@ -89,10 +92,19 @@ class Cache:
     def user_correlations(self, value):
         self._user_correlations = value
 
+    @property
+    def min_common_elements(self):
+        return self._min_common_elements
+
+    @min_common_elements.setter
+    def min_common_elements(self, value):
+        self._min_common_elements = value
+
 
 class TemporalCache(Cache):
 
-    def __init__(self, time_constraint: TimeConstraint,
+    def __init__(self,
+                 time_constraint: TimeConstraint,
                  is_ratings_cached=False,
                  ratings=None,
                  is_movies_cached=False,
@@ -102,25 +114,37 @@ class TemporalCache(Cache):
                  is_user_movie_matrix_cached=False,
                  user_movie_matrix=None,
                  is_user_correlations_cached=False,
-                 user_correlations=None
-                 ):
-        super().__init__(
-                 is_ratings_cached=is_ratings_cached,
-                 ratings=ratings,
-                 is_movies_cached=is_movies_cached,
-                 movies=movies,
-                 is_movie_ratings_cached=is_movie_ratings_cached,
-                 movie_ratings=movie_ratings,
-                 is_user_movie_matrix_cached=is_user_movie_matrix_cached,
-                 user_movie_matrix=user_movie_matrix,
-                 is_user_correlations_cached=is_user_correlations_cached,
-                 user_correlations=user_correlations)
+                 user_correlations=None,
+                 min_common_elements=5,
+                 use_avg_ratings_cache=True):
+
+        super().__init__(is_ratings_cached=is_ratings_cached,
+                         ratings=ratings,
+                         is_movies_cached=is_movies_cached,
+                         movies=movies,
+                         is_movie_ratings_cached=is_movie_ratings_cached,
+                         movie_ratings=movie_ratings,
+                         is_user_movie_matrix_cached=is_user_movie_matrix_cached,
+                         user_movie_matrix=user_movie_matrix,
+                         is_user_correlations_cached=is_user_correlations_cached,
+                         user_correlations=user_correlations,
+                         min_common_elements=min_common_elements,
+                         use_avg_ratings_cache=use_avg_ratings_cache)
+
         self.time_constraint = time_constraint
 
     def is_temporal_cache_valid(self):
-        if self.time_constraint is None:
-            return False
-        if self.time_constraint.is_valid_time_bin() or self.time_constraint.is_valid_max_limit():
+        # No TimeConstraint, valid
+        if self._time_constraint is None:
+            return True
+        # Bin TimeConstraint or Max Limit TimeConstraint, valid
+        if self._time_constraint.is_valid_time_bin() or self._time_constraint.is_valid_max_limit():
+            return True
+        # Else, Not Valid
+        return False
+
+    def does_cache_match(self, time_constraint: TimeConstraint, min_common_elements):
+        if self._time_constraint == time_constraint and self._min_common_elements == min_common_elements:
             return True
         return False
 
@@ -131,8 +155,3 @@ class TemporalCache(Cache):
     @time_constraint.setter
     def time_constraint(self, value):
         self._time_constraint = value
-
-
-
-
-
