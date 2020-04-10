@@ -1,7 +1,8 @@
 from dataset import MovieLensDataset
-import pandas as pd
+from timeit import default_timer              # used in unit tests, see commented lines at the end
 from datetime import datetime
-from constraints import PredictionTimeConstraint
+from constraints import TimeConstraint
+import pandas as pd
 import random
 
 
@@ -61,43 +62,44 @@ class Trainset:
         user_ratings = self.get_user_ratings(user_id=user_id)
         return user_ratings.rating.mean() if not user_ratings.empty else 0
 
+    def get_user_avg_timestamp(self, user_id: int):
+        user_ratings = self.get_user_ratings(user_id=user_id)
+        return user_ratings.timestamp.mean() if not user_ratings.empty else 0
+
     # TODO: NAME CHANGED
     def get_user_avg_at(self, user_id: int, at: datetime):
         user_ratings = self.get_user_ratings_at(user_id, at)
         return user_ratings.rating.mean() if not user_ratings.empty else 0
 
-    def get_movies_watched(self, user_id: int,
-                           time_constraint: PredictionTimeConstraint = None,
-                           dt: datetime = None, start_dt: datetime = None, end_dt: datetime = None) -> pd.DataFrame:
+    def get_movies_watched(self, user_id: int, time_constraint: TimeConstraint = None) -> pd.DataFrame:
         """
         Get the movies watched by the chosen user.
 
         :param user_id: the user that we want to get the movies he-she has watched.
         :param time_constraint: type of the time constraint.
-        :param dt: used only when 'AT' time_constraint. Used as max date when getting movies
-        :param start_dt: used only with 'IN' time_constraint.
-               Used as start date of the interval to which we take the movies into account.
-        :param end_dt: used only with 'IN' time_constraint. Used as the end date of the interval.
         :return: DataFrame of all movies watched with 'item_id', 'rating' columns
         """
-        if time_constraint is None or time_constraint == PredictionTimeConstraint.NO:
+        if time_constraint is None:
             return self._movie_ratings.loc[(self._movie_ratings['user_id'] == user_id)][['item_id', 'rating']]
-        elif time_constraint == PredictionTimeConstraint.AT and dt is not None:
+
+        if time_constraint.is_valid_max_limit():
             return self._movie_ratings.loc[(self._movie_ratings['user_id'] == user_id)
-                                           & (self._movie_ratings.timestamp < dt)][['item_id', 'rating']]
-        elif time_constraint == PredictionTimeConstraint.IN and start_dt is not None and end_dt is not None:
+                                           & (self._movie_ratings.timestamp < time_constraint.end_dt)][['item_id', 'rating']]
+        elif time_constraint.is_valid_time_bin():
+            print("Valid Bin\n")
             return self._movie_ratings.loc[(self._movie_ratings['user_id'] == user_id)
-                                           & (self._movie_ratings.timestamp >= start_dt)
-                                           & (self._movie_ratings.timestamp < end_dt)][['item_id', 'rating']]
-        else:
-            raise Exception("Undefined time_constraint is given!")
+                                           & (self._movie_ratings.timestamp >= time_constraint.start_dt)
+                                           & (self._movie_ratings.timestamp < time_constraint.end_dt)][['item_id', 'rating']]
+        raise Exception("Undefined time_constraint is given!")
 
     # TODO: relocate this method to another class. it doesnt feel right here
     # TODO: NAME CHANGED
     # TODO: check if empty at the caller
-    def get_random_movies_watched(self, user_id, n=1) -> pd.DataFrame:
+    def get_random_movies_watched(self, user_id: int, n=2) -> pd.DataFrame:
         """
-        Get random n movies watched by the user
+        Get random n movies watched by the user. Only use when n > 2
+
+        Use get_random_movie_watched if n=1 since that one 2 fold faster.
 
         :param user_id: the user of interest
         :param n: number of random movies to get
@@ -105,6 +107,44 @@ class Trainset:
         """
         movies_watched = self.get_movies_watched(user_id=user_id)
         return movies_watched.sample(n=n) if not movies_watched.empty else movies_watched
+
+    # TODO: check if 0, which means user does not exists on the caller
+    def get_random_movie_watched(self, user_id: int) -> int:
+        """
+        Get random movie id watched.
+
+        :param user_id: User of interest
+        :return:  movie_id or item_id of the random movie watched by the user.
+                  In case non-valid user_id supplied then returns 0
+        """
+        movies_watched = self.get_movies_watched(user_id=user_id)
+        return random.choice(movies_watched['item_id'].values.tolist()) if not movies_watched.empty else 0
+
+    def get_random_movie_per_user(self, user_id_list):
+        """
+        Get random movie for each user given in the 'user_id_list'
+
+        :param user_id_list: List of valid user_ids
+        :return: List of (user_id, movie_id) tuples
+                where each movie_id is randomly chosen from watched movies of the user_id .
+                In case any one of the user_id's supplies invalid, then the movie_id will be 0 for that user.
+        """
+        user_movie_list = list()
+        for user_id in user_id_list:
+            user_movie_list.append((user_id, self.get_random_movie_watched(user_id=user_id)))
+        return user_movie_list
+
+    def get_active_users(self, n=10) -> pd.DataFrame:
+        """
+        Get Users in sorted order where the first one is the one who has given most ratings.
+        :param n: Number of users to retrieve.
+        :return: user DataFrame with index of 'user_id' and columns of ['mean_rating', 'No_of_ratings'] .
+        """
+        active_users = pd.DataFrame(self._movie_ratings.groupby('user_id')['rating'].mean())
+        active_users['No_of_ratings'] = pd.DataFrame(self._movie_ratings.groupby('user_id')['rating'].count())
+        active_users.sort_values(by=['No_of_ratings'], ascending=False)
+        active_users.columns = ['mean_rating', 'No_of_ratings']
+        return active_users.head(n)
 
     # TODO: NAME CHANGED
     # TODO: This function have high cost, Look for alternative
@@ -169,5 +209,20 @@ t = Trainset(MovieLensDataset.load())
 # print(t.get_user_avg_rating_at(3, datetime(2019,3,5)))
 # print(t.get_random_movies_watched(user_id=3))
 # print(t.get_random_users())
+
+# st = default_timer()
+# x = t.get_random_movies_watched(user_id=3)
+# print(f"time taken = {default_timer() - st}, movie= {x}")
+#
+# st = default_timer()
+# x = t.get_random_movie_watched(user_id=3)
+# print(f"time taken = {default_timer() - st}, movie= {x}")
+#
+# print(t.get_active_users(5))
+
+# print(t.get_user_avg_timestamp(548))
+# print(t.get_movies_watched(548, time_constraint=TimeConstraint(end_dt=datetime(2017,3,28), start_dt=datetime(2017,3,3))))
+
+
 
 
