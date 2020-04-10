@@ -33,6 +33,20 @@ class TimeConstraint:
             return True
         return False
 
+    # Comparing TimeConstraints
+
+    def __eq__(self, other):
+        if other is None:
+            return False
+        return self._start_dt == other.start_dt and self._end_dt == other.end_dt
+
+    def __ne__(self, other):
+        if other is None:
+            return False
+        return self._start_dt != other.start_dt or self._end_dt != other.end_dt
+
+    # Properties
+
     @property
     def end_dt(self):
         return self._end_dt
