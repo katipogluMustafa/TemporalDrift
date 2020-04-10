@@ -61,6 +61,10 @@ class MovieLensDataset(Dataset):
         return ratings
 
     @staticmethod
+    def create_movie_ratings(ratings, movies):
+        return pd.merge(ratings, movies, on='item_id')
+
+    @staticmethod
     def load(ratings_col_names=('user_id', 'item_id', 'rating', 'timestamp'),
              ratings_path=r'C:\Users\Yukawa\datasets\ml-latest-small\ratings.csv',
              movies_col_names=('item_id', 'title', 'genres'),
