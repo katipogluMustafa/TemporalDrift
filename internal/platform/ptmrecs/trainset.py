@@ -1,6 +1,7 @@
+from .constraints import TimeConstraint
+from .similarity import TemporalPearson
+from .cache import TemporalCache, Cache
 from datetime import datetime
-from constraints import TimeConstraint
-from cache import Cache
 import pandas as pd
 import random
 
@@ -133,14 +134,6 @@ class TrainsetUser:
         return user_ratings.rating.mean() if not user_ratings.empty else 0
 
 
-class Trainset:
-    def __init__(self, cache: Cache):
-        self.cache = cache
-
-        if not self.cache.is_movie_ratings_cached:
-            raise Exception("'movie_ratings' has not been cached !")
-
-
 class TrainsetMovie:
 
     def __init__(self, cache: Cache):
@@ -151,6 +144,16 @@ class TrainsetMovie:
 
         if not self.cache.is_movie_ratings_cached:
             raise Exception("'movie_ratings' has not been cached !")
+
+    def get_movie(self, movie_id) -> pd.DataFrame:
+        """
+        Get Movie Record
+
+        :return: DataFrame which contains the given 'movie_id's details. If not found empty DataFrame .
+        """
+        if self.cache.is_movies_cached:
+            return self.cache.movies.loc[self.cache.movies['item_id'] == movie_id]
+        return self.cache.movie_ratings.loc[self.cache.movie_ratings['item_id'] == movie_id]
 
     # TODO: NAME CHANGED
     def get_movies(self):
@@ -176,7 +179,7 @@ class TrainsetMovie:
 
     def get_movies_watched(self, user_id: int, time_constraint: TimeConstraint = None) -> pd.DataFrame:
         """
-        Get the movies watched by the chosen user.
+        Get all the movies watched by the chosen user.
 
         :param user_id: the user that we want to get the movies he-she has watched.
         :param time_constraint: type of the time constraint.
@@ -192,7 +195,6 @@ class TrainsetMovie:
             return movie_ratings.loc[(movie_ratings['user_id'] == user_id)
                                      & (movie_ratings.timestamp < time_constraint.end_dt)][['item_id', 'rating']]
         elif time_constraint.is_valid_time_bin():
-            print("Valid Bin\n")
             return movie_ratings.loc[(movie_ratings['user_id'] == user_id)
                                      & (movie_ratings.timestamp >= time_constraint.start_dt)
                                      & (movie_ratings.timestamp < time_constraint.end_dt)][['item_id', 'rating']]
@@ -256,5 +258,101 @@ class TrainsetMovie:
             user_movie_list.append((user_id, self.get_random_movie_watched(user_id=user_id)))
         return user_movie_list
 
+
+class Trainset:
+    def __init__(self, cache: TemporalCache, min_common_elements: int = 5):
+        self.cache = cache
+        self.min_common_elements = min_common_elements
+
+        if not self.cache.is_movie_ratings_cached:
+            raise Exception("'movie_ratings' has not been cached !")
+
+        if not self.cache.is_user_correlations_cached:
+            pearson = TemporalPearson(time_constraint=None,
+                                      cache=self.cache,
+                                      min_common_elements=self.min_common_elements)
+            pearson.cache_corr_matrix()
+
+        self.trainset_movie = TrainsetMovie(cache=cache)
+        self.trainset_user = TrainsetUser(cache=cache)
+
+    def predict_movies_watched(self, user_id, n=10, k=10, time_constraint=None):
+        # Get all movies watched by a user
+        movies_watched = self.trainset_movie.get_movies_watched(user_id=user_id)
+
+        if movies_watched.empty:
+            return None
+
+        predictions = list()
+        number_of_predictions = 0
+        for row in movies_watched.itertuples(index=False):
+            prediction = self.predict_movie(user_id=user_id, movie_id=row[0], time_constraint=time_constraint, k=k)
+            if number_of_predictions == n:
+                break
+            predictions.append([prediction, row[1], row[0]])
+            number_of_predictions += 1
+
+        predictions_df = pd.DataFrame(predictions, columns=['prediction', 'rating', 'movie_id'])
+        predictions_df.movie_id = predictions_df.movie_id.astype(int)
+        return predictions_df.set_index('movie_id')
+
+    def predict_movie(self, user_id, movie_id, k=10, time_constraint=None):
+
+        # If a movie with movie_id not exists, predict 0
+        if self.trainset_movie.get_movie(movie_id=movie_id).empty:
+            return 0
+
+        # Get Nearest Neighbours of the 'user_id'
+        k_nearest_neighbours = self.get_k_neighbours(user_id, k=k, time_constraint=time_constraint)
+
+        if k_nearest_neighbours is None or k_nearest_neighbours.empty:
+            return 0
+
+        # Create a Predictor
+        predictor = TemporalPearson(time_constraint=None, cache=self.cache)
+
+        return predictor.mean_centered_pearson(user_id=user_id, movie_id=movie_id, k_neighbours=k_nearest_neighbours)
+
+    def get_k_neighbours(self, user_id, k=20, time_constraint: TimeConstraint = None):
+        """
+        :param user_id: the user of interest
+        :param k: number of neighbours to retrieve
+        :param time_constraint: time constraint when choosing neighbours
+        :return: Returns the k neighbours and correlations in between them. If no neighbours found, returns None
+                 DataFrame which has 'Correlation' column and 'user_id' index.
+        """
+
+        # Apply Time Constraint and get user_correlations to each other as matrix
+        if time_constraint is None and self.cache.is_user_correlations_cached:
+            user_corr_matrix = self.cache.user_correlations
+        else:
+            pearson = TemporalPearson(time_constraint=time_constraint,
+                                      cache=self.cache,
+                                      min_common_elements=self.min_common_elements)
+            user_corr_matrix = pearson.get_corr_matrix()
+
+        # Exit if matrix is None, no user found in self.cache.movie_ratings, something is wrong
+        if user_corr_matrix is None:
+            return None
+
+        # Get the chosen 'user_id's correlations
+        user_correlations = user_corr_matrix.get(user_id)
+        if user_correlations is None:
+            return None
+
+        # Drop any null, if found
+        user_correlations.dropna(inplace=True)
+        # Create A DataFrame from not-null correlations of the 'user_id'
+        users_alike = pd.DataFrame(user_correlations)
+        # Rename the only column to 'correlation'
+        users_alike.columns = ['correlation']
+
+        # Sort the user correlations in descending order
+        #     so that first one is the most similar, last one least similar
+        users_alike.sort_values(by='correlation', ascending=False, inplace=True)
+
+        # Eliminate Correlation to itself by deleting first row,
+        #     since biggest corr is with itself it is in first row
+        return users_alike.iloc[1:k+1]
 
 
