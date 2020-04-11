@@ -99,13 +99,20 @@ class TrainsetUser:
         :return: if found the datetime object otherwise None
         """
 
-        if self.cache.is_ratings_cached:                         # 30% faster than other choice
+        if self.cache.is_ratings_cached:
             data = self.cache.ratings
         else:
             data = self.cache.movie_ratings
 
         timestamp = data.loc[(data['user_id'] == user_id) & (data['item_id'] == movie_id)]
         return timestamp.values[0, 3] if not timestamp.empty else None
+
+    def get_first_timestamp(self):
+        if self.cache.is_ratings_cached:
+            data = self.cache.ratings
+        else:
+            data = self.cache.movie_ratings
+        return data['timestamp'].min()
 
     def get_user_avg_timestamp(self, user_id: int):
         user_ratings = self.get_user_ratings(user_id=user_id)
@@ -276,7 +283,16 @@ class Trainset:
         self.trainset_movie = TrainsetMovie(cache=cache)
         self.trainset_user = TrainsetUser(cache=cache)
 
-    def predict_movies_watched(self, user_id, n=10, k=10, time_constraint=None):
+    def predict_movies_watched(self, user_id, n=10, k=10, time_constraint=None) -> pd.DataFrame:
+        """
+
+        :param user_id: user of interest
+        :param n: Number of movies to predict
+        :param k: k neighbours to take into account
+        :param time_constraint: When calculating k neighbours,
+                                only those that comply to time_constraints will be taken into account.
+        :return: DataFrame of Predictions where columns = ['prediction', 'rating'] index = 'movie_id'
+        """
         # Get all movies watched by a user
         movies_watched = self.trainset_movie.get_movies_watched(user_id=user_id)
 
