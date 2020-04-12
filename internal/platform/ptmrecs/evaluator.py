@@ -43,7 +43,9 @@ class Evaluator:
         time_constraint_data = defaultdict(list)
         time_constraint = TimeConstraint(end_dt=datetime(year=min_year, month=1, day=1))
         # Create cache if bulk_corr_cache is allowed
-        trainset.cache.cache_user_corrs_in_bulk_for_max_limit(time_constraint, min_year=min_year, max_year=max_year)
+        trainset.similarity.cache_user_corrs_in_bulk_for_max_limit(time_constraint,
+                                                                   min_year=min_year,
+                                                                   max_year=max_year)
 
         for year in range(min_year, max_year):
             time_constraint.end_dt = time_constraint.end_dt.replace(year=year)
@@ -81,11 +83,24 @@ class Evaluator:
         data.set_index('user_id', inplace=True)
         return data
 
-    def evaluate_time_bins(self, n_users, k):
-        trainset = self.trainset
-        min_year = trainset.trainset_user.get_first_timestamp().year
+    def evaluate_time_bins_in_bulk(self, n_users, k=10, min_time_bin_size=2, max_time_bin_size=10):
+        min_year = self.trainset.trainset_user.get_first_timestamp().year
         max_year = datetime.now().year
 
+        # Cache all years before processing
+        time_constraint = TimeConstraint(start_dt=datetime(year=min_year, month=1, day=1),
+                                         end_dt=datetime(year=max_year, month=1, day=1))
+        self.trainset.similarity.cache_user_corrs_in_bulk_for_time_bins(time_constraint,
+                                                                        min_year=min_year,
+                                                                        max_year=max_year,
+                                                                        min_time_bin_size=min_time_bin_size,
+                                                                        max_time_bin_size=max_time_bin_size)
+        self.evaluate_time_bins(n_users=n_users, k=k, min_year=min_year, max_year=max_year,
+                                min_time_bin_size=min_time_bin_size,
+                                max_time_bin_size=max_time_bin_size)
+
+    def evaluate_time_bins(self, n_users, k, min_year, max_year, min_time_bin_size=2, max_time_bin_size=10):
+        trainset = self.trainset
         if n_users > 600:
             user_list = trainset.trainset_user.get_users()
         else:
@@ -95,8 +110,8 @@ class Evaluator:
 
         result = list()
 
-        # Take each bins where first bin 2 years, last one 9 years
-        for time_bin_size in range(2, 10):
+        # Take each bins where first bin 'min_time_bin_size' years, last one 'max_time_bin_size - 1' years
+        for time_bin_size in range(min_time_bin_size, max_time_bin_size):
             # Shift each time_bin starting with 0 years up until (time_bin-1) years
             for shift in range(0, time_bin_size):
                 curr_year = min_year + shift
@@ -107,7 +122,8 @@ class Evaluator:
                     for user_id, movie_id in user_movie_list:
                         p = trainset.predict_movie(user_id=user_id, movie_id=movie_id, k=k,
                                                    time_constraint=TimeConstraint(start_dt=datetime(curr_year, 1, 1),
-                                                                                  end_dt=datetime(curr_year+time_bin_size, 1, 1)))
+                                                                                  end_dt=datetime(curr_year+time_bin_size, 1, 1)),
+                                                   bin_size=time_bin_size)
                         # if prediction has been done successfully
                         if p != 0:
                             r = trainset.trainset_movie.get_movie_rating(movie_id=movie_id, user_id=user_id)

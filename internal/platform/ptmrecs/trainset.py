@@ -300,7 +300,8 @@ class Trainset:
         predictions = list()
         number_of_predictions = 0
         for row in movies_watched.itertuples(index=False):
-            prediction = self.predict_movie(user_id=user_id, movie_id=row[0], time_constraint=time_constraint, k=k)
+            prediction = self.predict_movie(user_id=user_id, movie_id=row[0],
+                                            time_constraint=time_constraint, k=k)
             if number_of_predictions == n:
                 break
             predictions.append([prediction, row[1], row[0]])
@@ -310,23 +311,25 @@ class Trainset:
         predictions_df.movie_id = predictions_df.movie_id.astype(int)
         return predictions_df.set_index('movie_id')
 
-    def predict_movie(self, user_id, movie_id, k=10, time_constraint=None):
+    def predict_movie(self, user_id, movie_id, k=10, time_constraint=None, bin_size=-1):
         return self.similarity.mean_centered_pearson(user_id=user_id,
                                                      movie_id=movie_id,
                                                      k_neighbours=self.get_k_neighbours(user_id, k=k,
-                                                                                        time_constraint=time_constraint)
+                                                                                        time_constraint=time_constraint,
+                                                                                        bin_size=bin_size)
                                                      )
 
-    def get_k_neighbours(self, user_id, k=20, time_constraint: TimeConstraint = None):
+    def get_k_neighbours(self, user_id, k=20, time_constraint: TimeConstraint = None, bin_size=-1):
         """
         :param user_id: the user of interest
         :param k: number of neighbours to retrieve
         :param time_constraint: time constraint when choosing neighbours
+        :param bin_size: Used when using time_bins, in order to select bin from cache
         :return: Returns the k neighbours and correlations in between them. If no neighbours found, returns None
                  DataFrame which has 'Correlation' column and 'user_id' index.
         """
         self.similarity.time_constraint = time_constraint
-        user_corr_matrix = self.similarity.get_corr_matrix()
+        user_corr_matrix = self.similarity.get_corr_matrix(bin_size=bin_size)
 
         # Exit if matrix is None, no user found in self.cache.movie_ratings, something is wrong
         if user_corr_matrix is None:

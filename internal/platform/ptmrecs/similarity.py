@@ -1,6 +1,7 @@
 from .constraints import TimeConstraint
 import pandas as pd
 from .cache import TemporalCache
+from datetime import datetime
 
 
 class TemporalPearson:
@@ -54,7 +55,7 @@ class TemporalPearson:
 
         return prediction_rating
 
-    def get_corr_matrix(self):
+    def get_corr_matrix(self, bin_size=-1):
         user_corrs = None
         # if valid cache found, try to get user corrs from there
         if self.cache.is_temporal_cache_valid():
@@ -64,7 +65,8 @@ class TemporalPearson:
                 return user_corrs
             # Then check bulk-user-correlations
             user_corrs = self.cache.get_user_corrs_from_bulk(time_constraint=self.time_constraint,
-                                                             min_common_elements=self.min_common_elements)
+                                                             min_common_elements=self.min_common_elements,
+                                                             bin_size=bin_size)
             if user_corrs is not None:
                 return user_corrs
 
@@ -104,23 +106,41 @@ class TemporalPearson:
         :param min_year: start of the range
         :param max_year: end of the range
         """
-        self.cache.user_corrs_in_bulk = dict()
 
         if self.cache.use_bulk_corr_cache:
             if time_constraint is not None and time_constraint.is_valid_max_limit():
+                self.cache.user_corrs_in_bulk = dict()
                 for year in range(min_year, max_year):
                     time_constraint.end_dt = time_constraint.end_dt.replace(year=year)
                     corrs = TemporalPearson.create_user_corrs(self.cache.movie_ratings, time_constraint,
                                                               self.min_common_elements)
                     self.cache.user_corrs_in_bulk[year] = corrs
             else:
-                raise Exception("Trying to cache user correlations in bulk for max_limit but start time is not max_limit!")
+                raise Exception("Trying to cache user correlations in bulk for max_limit "
+                                "but start time is not max_limit!")
         else:
             raise Exception("Trying to create bulk corr cache when use_bulk_corr_cache is False")
 
-    # TODO: Implement!!!
-    def cache_user_corrs_in_bulk_for_time_bins(self, time_constraint, min_year, max_year):
-        pass
+    def cache_user_corrs_in_bulk_for_time_bins(self, time_constraint: TimeConstraint, min_year, max_year,
+                                               min_time_bin_size=2, max_time_bin_size=10):
+        if self.cache.use_bulk_corr_cache:
+            if time_constraint is not None and time_constraint.is_valid_time_bin():
+                del self.cache.user_corrs_in_bulk    # invalidate old cache
+                self.cache.user_corrs_in_bulk = dict()
+                for time_bin_size in range(min_time_bin_size, max_time_bin_size):
+                    self.cache.user_corrs_in_bulk[time_bin_size] = dict()
+                    for shift in range(0, time_bin_size):
+                        curr_year = min_year + shift
+                        while (curr_year + time_bin_size) < max_year:
+                            time_constraint = TimeConstraint(start_dt=datetime(curr_year, 1, 1),
+                                                             end_dt=datetime(curr_year + time_bin_size, 1, 1))
+                            corrs = TemporalPearson.create_user_corrs(self.cache.movie_ratings,
+                                                                      time_constraint,
+                                                                      self.min_common_elements)
+                            self.cache.user_corrs_in_bulk[time_bin_size][curr_year] = corrs
+                            curr_year += time_bin_size
+        else:
+            raise Exception("Trying to create bulk corr cache when use_bulk_corr_cache is False")
 
     @property
     def time_constraint(self):

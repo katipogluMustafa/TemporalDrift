@@ -158,7 +158,7 @@ class TemporalCache(Cache):
         # Else, Not Valid
         return False
 
-    def get_user_corrs_from_bulk(self, min_common_elements, time_constraint):
+    def get_user_corrs_from_bulk(self, min_common_elements, time_constraint, bin_size):
         if ((self.user_corrs_in_bulk is None) or (self.user_corrs_in_bulk is None)
                 or (time_constraint is None) or self.min_common_elements != min_common_elements):
             return None
@@ -166,8 +166,12 @@ class TemporalCache(Cache):
         if time_constraint.is_valid_max_limit():
             return self.user_corrs_in_bulk[time_constraint.end_dt.year]
 
-        # TODO: return from bin_cache
-        return None
+        if bin_size == -1:
+            return None
+
+        bins = self.user_corrs_in_bulk.get(bin_size)
+        if bins is not None:
+            return bins.get(time_constraint.start_dt.year)
 
     def get_user_corrs(self, min_common_elements, time_constraint=None):
         """
