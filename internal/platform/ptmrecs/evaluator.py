@@ -43,32 +43,17 @@ class Evaluator:
                                                                         min_year=min_year,
                                                                         max_year=max_year)
 
-        if n_users > 600:
-            user_list = self.trainset.trainset_user.get_users()  # No need to random selection, get all users
-        else:
-            user_list = self.trainset.trainset_user.get_random_users(n=n_users)  # Select random n users
-
-        no_constraint_data = dict()
-        # Calculate RMSE With No Constraint
-        for user_id in user_list:
-            rmse = Accuracy.rmse(self.trainset.predict_movies_watched(user_id, n_movies, k))
-            no_constraint_data[user_id] = rmse
-
         run_results = dict()
         for i in range(n):
             run_results[i] = self.evaluate_best_max_year_constraint(n_users=n_users, n_movies=n_movies, k=k,
                                                                     min_year=min_year, max_year=max_year,
-                                                                    user_list=user_list,
-                                                                    create_cache=False,
-                                                                    no_constraint_data=no_constraint_data)
+                                                                    create_cache=False,)
 
         return run_results
 
     def evaluate_best_max_year_constraint(self, n_users, n_movies, k,
                                           max_diff=0.1,
                                           min_year=-1, max_year=-1,
-                                          user_list=(),
-                                          no_constraint_data={},
                                           create_cache=True) -> defaultdict:
         """
         Evaluate the max_year constraint for evaluate_max_year_constraint method.
@@ -79,8 +64,6 @@ class Evaluator:
         :param k: Number of neighbours of each user to take into account when making prediction
         :param min_year: First year to evaluate
         :param max_year: Last year to evaluate
-        :param user_list: User supplied user list
-        :param no_constraint_data: user supplied rmse for each user in user_list when no constraint applied
         :param create_cache: create cache before running. For bulk callers.
         :return: Votes for years where each year got its vote
                  when rmse is less than 'max_diff' in between no constraint and year constraint
@@ -92,17 +75,16 @@ class Evaluator:
         if max_year == -1:
             max_year = datetime.now().year
 
-        if not user_list:
-            if n_users > 600:
-                user_list = self.trainset.trainset_user.get_users()  # No need to random selection, get all users
-            else:
-                user_list = self.trainset.trainset_user.get_random_users(n=n_users)  # Select random n users
+        if n_users > 600:
+            user_list = self.trainset.trainset_user.get_users()  # No need to random selection, get all users
+        else:
+            user_list = self.trainset.trainset_user.get_random_users(n=n_users)  # Select random n users
 
-        if not no_constraint_data:
-            # Calculate RMSE With No Constraint
-            for user_id in user_list:
-                rmse = Accuracy.rmse(self.trainset.predict_movies_watched(user_id, n_movies, k))
-                no_constraint_data[user_id] = rmse
+        # Calculate RMSE With No Constraint
+        no_constraint_data = dict()
+        for user_id in user_list:
+            rmse = Accuracy.rmse(self.trainset.predict_movies_watched(user_id, n_movies, k))
+            no_constraint_data[user_id] = rmse
 
         # # Calculate RMSE With Time Constraint
 
@@ -195,25 +177,18 @@ class Evaluator:
                                                                         min_time_bin_size=min_time_bin_size,
                                                                         max_time_bin_size=max_time_bin_size)
 
-        if n_users > 600:
-            user_list = self.trainset.trainset_user.get_users()
-        else:
-            user_list = self.trainset.trainset_user.get_random_users(n=n_users)
-        user_movie_list = self.trainset.trainset_movie.get_random_movie_per_user(user_list)
-
         run_results = dict()
         for i in range(n):
             run_results[i] = self.evaluate_time_bins(n_users=n_users, k=k, min_year=min_year, max_year=max_year,
                                                      min_time_bin_size=min_time_bin_size,
                                                      max_time_bin_size=max_time_bin_size,
-                                                     user_movie_list=user_movie_list,
                                                      create_cache=False)
 
         return run_results
 
     def evaluate_time_bins(self, n_users, k, min_year=-1, max_year=-1,
                            min_time_bin_size=2, max_time_bin_size=10,
-                           user_movie_list=(), create_cache=True) -> dict:
+                           create_cache=True) -> dict:
         """
 
         :param n_users: Number of users
@@ -222,7 +197,6 @@ class Evaluator:
         :param max_year: When to stop when taking time bins, last is not included.
         :param min_time_bin_size: Minimum bin size in years
         :param max_time_bin_size: Maximum bin size in years
-        :param user_movie_list: User supplied user_movie list. For bulk callers.
         :param create_cache: Create cache before calling time bins. For bulk callers.
         :return:
         """
@@ -234,13 +208,12 @@ class Evaluator:
         if max_year == -1:
             max_year = datetime.now().year
 
-        if not user_movie_list:
-            if n_users > 600:
-                user_list = trainset.trainset_user.get_users()
-            else:
-                user_list = trainset.trainset_user.get_random_users(n=n_users)
-            user_movie_list = trainset.trainset_movie.get_random_movie_per_user(user_list)
-        data = {"n_users": n_users, "k_neighbours": k}
+        if n_users > 600:
+            user_list = trainset.trainset_user.get_users()
+        else:
+            user_list = trainset.trainset_user.get_random_users(n=n_users)
+        user_movie_list = trainset.trainset_movie.get_random_movie_per_user(user_list)
+        data = dict()
 
         result = list()
 
