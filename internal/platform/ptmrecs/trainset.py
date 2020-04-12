@@ -270,18 +270,16 @@ class Trainset:
     def __init__(self, cache: TemporalCache, min_common_elements: int = 5):
         self.cache = cache
         self.min_common_elements = min_common_elements
+        self.similarity = TemporalPearson(time_constraint=None, cache=self.cache)
 
         if not self.cache.is_movie_ratings_cached:
             raise Exception("'movie_ratings' has not been cached !")
 
-        if not self.cache.is_user_correlations_cached:
-            pearson = TemporalPearson(time_constraint=None,
-                                      cache=self.cache,
-                                      min_common_elements=self.min_common_elements)
-            pearson.cache_corr_matrix()
-
         self.trainset_movie = TrainsetMovie(cache=cache)
         self.trainset_user = TrainsetUser(cache=cache)
+
+        # if caching is allowed, create user correlations cache
+        self.similarity.get_corr_matrix()
 
     def predict_movies_watched(self, user_id, n=10, k=10, time_constraint=None) -> pd.DataFrame:
         """
@@ -313,21 +311,11 @@ class Trainset:
         return predictions_df.set_index('movie_id')
 
     def predict_movie(self, user_id, movie_id, k=10, time_constraint=None):
-
-        # If a movie with movie_id not exists, predict 0
-        if self.trainset_movie.get_movie(movie_id=movie_id).empty:
-            return 0
-
-        # Get Nearest Neighbours of the 'user_id'
-        k_nearest_neighbours = self.get_k_neighbours(user_id, k=k, time_constraint=time_constraint)
-
-        if k_nearest_neighbours is None or k_nearest_neighbours.empty:
-            return 0
-
-        # Create a Predictor
-        predictor = TemporalPearson(time_constraint=None, cache=self.cache)
-
-        return predictor.mean_centered_pearson(user_id=user_id, movie_id=movie_id, k_neighbours=k_nearest_neighbours)
+        return self.similarity.mean_centered_pearson(user_id=user_id,
+                                                     movie_id=movie_id,
+                                                     k_neighbours=self.get_k_neighbours(user_id, k=k,
+                                                                                        time_constraint=time_constraint)
+                                                     )
 
     def get_k_neighbours(self, user_id, k=20, time_constraint: TimeConstraint = None):
         """
@@ -337,15 +325,8 @@ class Trainset:
         :return: Returns the k neighbours and correlations in between them. If no neighbours found, returns None
                  DataFrame which has 'Correlation' column and 'user_id' index.
         """
-
-        # Apply Time Constraint and get user_correlations to each other as matrix
-        if time_constraint is None and self.cache.is_user_correlations_cached:
-            user_corr_matrix = self.cache.user_correlations
-        else:
-            pearson = TemporalPearson(time_constraint=time_constraint,
-                                      cache=self.cache,
-                                      min_common_elements=self.min_common_elements)
-            user_corr_matrix = pearson.get_corr_matrix()
+        self.similarity.time_constraint = time_constraint
+        user_corr_matrix = self.similarity.get_corr_matrix()
 
         # Exit if matrix is None, no user found in self.cache.movie_ratings, something is wrong
         if user_corr_matrix is None:
