@@ -13,14 +13,13 @@ class Evaluator:
     def __init__(self, trainset: Trainset):
         self.trainset = trainset
 
-    def evaluate_best_max_year_constraint(self, n_users, n_movies, k, rmse_diff):
+    def evaluate_best_max_year_constraint(self, n_users, n_movies, k):
         """
         Evaluate the TimeConstraints and No TimeConstraints and get data about best max year constraint.
 
         :param n_users: Number of users to evaluate
         :param n_movies: Number of movies to evaluate per user
         :param k: number of neighbours to take into account
-        :param rmse_diff: Max RMSE difference to record the result
         :return: Dictionary of evaluation results
         """
         trainset = self.trainset
@@ -32,23 +31,30 @@ class Evaluator:
         else:
             user_list = trainset.trainset_user.get_random_users(n=n_users)  # Select random n users
 
-        data = defaultdict(list)
+        # Calculate RMSE With No Constraint
+        no_constraint_data = defaultdict(float)
+        for user_id in user_list:
+            rmse = Accuracy.rmse(trainset.predict_movies_watched(user_id, n_movies, k))
+            no_constraint_data[user_id] = rmse
 
-        # For Each Year
+        # # Calculate RMSE With Time Constraint
+
+        # Cache all years before processing
+        time_constraint_data = defaultdict(list)
+        time_constraint = TimeConstraint(end_dt=datetime(year=min_year, month=1, day=1))
+        # Create cache if bulk_corr_cache is allowed
+        trainset.cache.cache_user_corrs_in_bulk_for_max_limit(time_constraint, min_year=min_year, max_year=max_year)
+
         for year in range(min_year, max_year):
-            for user_id in user_list:
-                # Calculate RMSE
-                rmse = Accuracy.rmse(
-                    trainset.predict_movies_watched(user_id=user_id, n=n_movies, k=k, time_constraint=None))
-                time_constrained_rmse = Accuracy.rmse(
-                    trainset.predict_movies_watched(user_id=user_id, n=n_movies, k=k,
-                                                    time_constraint=TimeConstraint(end_dt=datetime(year=year,
-                                                                                                   month=1,
-                                                                                                   day=1))))
-                if rmse != 0 and time_constrained_rmse != 0 and abs(rmse - time_constrained_rmse) <= rmse_diff:
-                    data[year].append((rmse, time_constrained_rmse))
+            time_constraint.end_dt = time_constraint.end_dt.replace(year=year)
 
-        return data
+            for user_id in user_list:
+                rmse = Accuracy.rmse(trainset.predict_movies_watched(user_id=user_id, n=n_movies, k=k,
+                                                                     time_constraint=time_constraint))
+                if rmse != 0:
+                    time_constraint_data[year].append((user_id, rmse))
+
+        return no_constraint_data, time_constraint_data
 
     def evaluate_max_year_constraint(self, n_users, n_movies, k, time_constraint):
         trainset = self.trainset
