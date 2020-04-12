@@ -2,6 +2,9 @@ from .constraints import TimeConstraint
 
 
 class Cache:
+    """
+    Cache the repetitive data when making predictions.
+    """
 
     def __init__(self,
                  is_ratings_cached=False,
@@ -45,6 +48,10 @@ class Cache:
             self.avg_user_ratings = None
 
     def create_user_avg_rating_cache(self):
+        """
+        Create cache of average ratings of each user
+        :return: DataFrame of average ratings
+        """
         if self.is_ratings_cached:
             data = self.ratings
         else:
@@ -53,7 +60,7 @@ class Cache:
 
     def get_user_corrs(self, min_common_elements, time_constraint=None):
         """
-        If cached returns the cache, else none
+        If user correlations are cached returns the cache, else none
         :param min_common_elements: min common element in between users in order them to become neighbours
         :param time_constraint: used in temporal caches only, None in this context
         :return: user correlation matrix if cache found, else None
@@ -148,7 +155,11 @@ class TemporalCache(Cache):
         self.use_bulk_corr_cache = use_bulk_corr_cache
         self.user_corrs_in_bulk = None
 
-    def is_temporal_cache_valid(self):
+    def is_temporal_cache_valid(self) -> bool:
+        """
+        Check whether cache is valid or not.
+        :return:
+        """
         # No TimeConstraint, valid
         if self._time_constraint is None:
             return True
@@ -159,12 +170,19 @@ class TemporalCache(Cache):
         return False
 
     def get_user_corrs_from_bulk(self, min_common_elements, time_constraint, bin_size):
+        """
+        Gets the user correlations if the time_constrain's matches from bulk cache(if found).
+        :param min_common_elements: Min common elements used when calculating k_neighbours
+        :param time_constraint: TimeConstraint to apply when calculating k neighbours
+        :param bin_size: If the time_constraints is type of time_bin, used to get cache value.
+        :return: User correlations from cache
+        """
         if ((self.user_corrs_in_bulk is None) or (self.user_corrs_in_bulk is None)
                 or (time_constraint is None) or self.min_common_elements != min_common_elements):
             return None
 
         if time_constraint.is_valid_max_limit():
-            return self.user_corrs_in_bulk[time_constraint.end_dt.year]
+            return self.user_corrs_in_bulk.get(time_constraint.end_dt.year)
 
         if bin_size == -1:
             return None
@@ -175,7 +193,7 @@ class TemporalCache(Cache):
 
     def get_user_corrs(self, min_common_elements, time_constraint=None):
         """
-        If cached returns the cache, else none
+        If user correlations cached returns the cache, else none
 
         :param min_common_elements: min common element in between users in order them to become neighbours
         :param time_constraint: time constraint on user correlations
@@ -187,6 +205,13 @@ class TemporalCache(Cache):
         return None
 
     def set_user_corrs(self, user_corrs, min_common_elements, time_constraint):
+        """
+        Update User correlations
+        :param user_corrs: new user correlations
+        :param min_common_elements: min common elements used when calculating 'user_corrs'
+        :param time_constraint: time_constraint applied when calculating 'user_corrs'
+        """
+
         # Only set when caching is open for user_correlations
         if self.is_user_correlations_cached:
             self._time_constraint = time_constraint

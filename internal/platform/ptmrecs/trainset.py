@@ -305,12 +305,14 @@ class Trainset:
         return predictions_df.set_index('movie_id')
 
     def predict_movie(self, user_id, movie_id, k=10, time_constraint=None, bin_size=-1):
-        return self.similarity.mean_centered_pearson(user_id=user_id,
-                                                     movie_id=movie_id,
-                                                     k_neighbours=self.get_k_neighbours(user_id, k=k,
-                                                                                        time_constraint=time_constraint,
-                                                                                        bin_size=bin_size)
-                                                     )
+        prediction = self.similarity.mean_centered_pearson(user_id=user_id,
+                                                           movie_id=movie_id,
+                                                           k_neighbours=
+                                                           self.get_k_neighbours(user_id, k=k,
+                                                                                 time_constraint=time_constraint,
+                                                                                 bin_size=bin_size)
+                                                           )
+        return prediction if prediction <= 5 else 5
 
     def get_k_neighbours(self, user_id, k=20, time_constraint: TimeConstraint = None, bin_size=-1):
         """

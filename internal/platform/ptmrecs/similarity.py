@@ -55,7 +55,13 @@ class TemporalPearson:
 
         return prediction_rating
 
-    def get_corr_matrix(self, bin_size=-1):
+    def get_corr_matrix(self, bin_size=-1) -> pd.DataFrame:
+        """
+        Get user correlations matrix. If cache found, returns from cache, otherwise creates new one.
+        :param bin_size: when similarity.time_constraint is a time_bin, used to get correlations from cache
+        :return: User Correlations as DataFrame
+        """
+
         user_corrs = None
         # if valid cache found, try to get user corrs from there
         if self.cache.is_temporal_cache_valid():
@@ -84,7 +90,14 @@ class TemporalPearson:
         return user_corrs
 
     @staticmethod
-    def create_user_corrs(movie_ratings, time_constraint: TimeConstraint, min_common_elements):
+    def create_user_corrs(movie_ratings, time_constraint: TimeConstraint, min_common_elements: int) -> pd.DataFrame:
+        """
+        Create user correlations DataFrame
+        :param movie_ratings: user and movie data merged
+        :param time_constraint: time_constraint to apply
+        :param min_common_elements: min common elements that needs to be given for two user to become neighbours
+        :return: User Correlations DataFrame
+        """
         # by default movie_ratings is for no time constraint
         # with these controls change the time constraint of the movie_ratings
         if time_constraint is not None:
@@ -97,7 +110,7 @@ class TemporalPearson:
         user_movie_matrix = movie_ratings.pivot_table(index='title', columns='user_id', values='rating')
         return user_movie_matrix.corr(method="pearson", min_periods=min_common_elements)
 
-    def cache_user_corrs_in_bulk_for_max_limit(self, time_constraint: TimeConstraint, min_year, max_year):
+    def cache_user_corrs_in_bulk_for_max_limit(self, time_constraint: TimeConstraint, min_year: int, max_year: int):
         """
         Cache user correlations by changing year of the time_constraint
         for each year in between min_year and max_year(not included)
@@ -123,6 +136,18 @@ class TemporalPearson:
 
     def cache_user_corrs_in_bulk_for_time_bins(self, time_constraint: TimeConstraint, min_year, max_year,
                                                min_time_bin_size=2, max_time_bin_size=10):
+        """
+        Cache user correlations by shifting time bins in between min_year and max_year.
+
+        Each bin is shifted (bin_size - 1) time starting from min_year up until max_year and in each of them,
+        another user correlations DataFrame is cached.
+
+        :param time_constraint: representative time constraint, just to make sure we want to cache time bins.
+        :param min_year: Start of the caching range
+        :param max_year: End of the caching range
+        :param min_time_bin_size: Minimum bin_size to start cache
+        :param max_time_bin_size: Maximum bin_size to start cache
+        """
         if self.cache.use_bulk_corr_cache:
             if time_constraint is not None and time_constraint.is_valid_time_bin():
                 del self.cache.user_corrs_in_bulk    # invalidate old cache

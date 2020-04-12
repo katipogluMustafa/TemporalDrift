@@ -2,9 +2,18 @@ import pandas as pd
 
 
 class Accuracy:
+    """
+    Calculate accuracy of predictions.
+    """
 
     @staticmethod
     def rmse(predictions) -> float:
+        """
+        Calculate root mean square error of the given list or DataFrame of predictions.
+        :param predictions: List of (prediction,actual) or DataFrame with ['prediction', 'rating'] columns
+               where name of the columns is not important.
+        :return: RMSE value
+        """
         if type(predictions) is pd.DataFrame:
             number_of_predictions = 0
             sum_of_square_differences = 0.0
