@@ -63,4 +63,10 @@ class TimeConstraint:
     def start_dt(self, value):
         self._start_dt = value
 
+    # Printing TimeConstraints
 
+    def __repr__(self):
+        return f"(start = {self._start_dt}, end= {self._end_dt})"
+
+    def __str__(self):
+        return f"(start = {self._start_dt}, end= {self._end_dt})"
