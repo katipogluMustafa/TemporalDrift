@@ -13,29 +13,93 @@ class Evaluator:
     def __init__(self, trainset: Trainset):
         self.trainset = trainset
 
-    def evaluate_best_max_year_constraint(self, n_users, n_movies, k):
+    def evaluate_best_max_year_in_bulk(self, n,
+                                       n_users, n_movies, k=10,
+                                       min_year=-1,
+                                       max_year=-1) -> tuple:
         """
-        Evaluate the TimeConstraints and No TimeConstraints and get data about best max year constraint.
+        Evaluate and collect data about best max year constraint which can be put instead of no constraint.
 
-        :param n_users: Number of users to evaluate
-        :param n_movies: Number of movies to evaluate per user
-        :param k: number of neighbours to take into account
-        :return: Dictionary of evaluation results
+        This method calls 'evaluate_best_max_year_constraint' method 'n' times.
+        Takes required precautions for bulk calling.
+
+        :param n: Number of runs that we run the evaluate_best_max_year_constraint() method
+        :param n_users: Number of users to check
+        :param n_movies: Number of movies per user to check
+        :param k: Number of neighbours of each user to take into account when making prediction
+        :param min_year: First year to evaluate
+        :param max_year: Last year to evaluate
+        :return: (no_constrain_rmse_data, best_year_constraint_results)
         """
-        trainset = self.trainset
-        min_year = trainset.trainset_user.get_first_timestamp().year
-        max_year = datetime.now().year
+        if min_year == -1:
+            min_year = self.trainset.trainset_user.get_first_timestamp().year
+
+        if max_year == -1:
+            max_year = datetime.now().year
+
+        time_constraint = TimeConstraint(end_dt=datetime(year=min_year, month=1, day=1))
+        # Create cache if bulk_corr_cache is allowed
+        self.trainset.similarity.cache_user_corrs_in_bulk_for_max_limit(time_constraint,
+                                                                        min_year=min_year,
+                                                                        max_year=max_year)
 
         if n_users > 600:
-            user_list = trainset.trainset_user.get_users()  # No need to random selection, get all users
+            user_list = self.trainset.trainset_user.get_users()  # No need to random selection, get all users
         else:
-            user_list = trainset.trainset_user.get_random_users(n=n_users)  # Select random n users
+            user_list = self.trainset.trainset_user.get_random_users(n=n_users)  # Select random n users
 
+        no_constraint_data = dict()
         # Calculate RMSE With No Constraint
-        no_constraint_data = defaultdict(float)
         for user_id in user_list:
-            rmse = Accuracy.rmse(trainset.predict_movies_watched(user_id, n_movies, k))
+            rmse = Accuracy.rmse(self.trainset.predict_movies_watched(user_id, n_movies, k))
             no_constraint_data[user_id] = rmse
+
+        run_results = dict()
+        for i in range(n):
+            run_results[i] = self.evaluate_best_max_year_constraint(n_users=n_users, n_movies=n_movies, k=k,
+                                                                    min_year=min_year, max_year=max_year,
+                                                                    user_list=user_list,
+                                                                    create_cache=False,
+                                                                    calculate_no_const=False)
+
+        return no_constraint_data, run_results
+
+    def evaluate_best_max_year_constraint(self, n_users, n_movies, k,
+                                          min_year=-1, max_year=-1, user_list=(),
+                                          calculate_no_const=True,
+                                          create_cache=True) -> tuple:
+        """
+        Evaluate the max_year constraint for evaluate_max_year_constraint method.
+
+        :param n_users: Number of users to evaluate
+        :param n_movies: Number of movies per user to evaluate
+        :param k: Number of neighbours of each user to take into account when making prediction
+        :param min_year: First year to evaluate
+        :param max_year: Last year to evaluate
+        :param user_list: User supplied user list
+        :param calculate_no_const: do not calculate no constraint result. For bulk callers.
+        :param create_cache: create cache before running. For bulk callers.
+        :return: Evaluation results in tuple, where first one no constraint result, second with constraint
+        """
+
+        if min_year == -1:
+            min_year = self.trainset.trainset_user.get_first_timestamp().year
+
+        if max_year == -1:
+            max_year = datetime.now().year
+
+        if not user_list:
+            if n_users > 600:
+                user_list = self.trainset.trainset_user.get_users()  # No need to random selection, get all users
+            else:
+                user_list = self.trainset.trainset_user.get_random_users(n=n_users)  # Select random n users
+
+        no_constraint_data = dict()
+        if calculate_no_const:
+            # Calculate RMSE With No Constraint
+            for user_id in user_list:
+                rmse = Accuracy.rmse(self.trainset.predict_movies_watched(user_id, n_movies, k))
+                no_constraint_data[user_id] = rmse
 
         # # Calculate RMSE With Time Constraint
 
@@ -43,22 +107,34 @@ class Evaluator:
         time_constraint_data = defaultdict(list)
         time_constraint = TimeConstraint(end_dt=datetime(year=min_year, month=1, day=1))
         # Create cache if bulk_corr_cache is allowed
-        trainset.similarity.cache_user_corrs_in_bulk_for_max_limit(time_constraint,
-                                                                   min_year=min_year,
-                                                                   max_year=max_year)
+        if create_cache:
+            self.trainset.similarity.cache_user_corrs_in_bulk_for_max_limit(time_constraint,
+                                                                            min_year=min_year,
+                                                                            max_year=max_year)
 
         for year in range(min_year, max_year):
             time_constraint.end_dt = time_constraint.end_dt.replace(year=year)
 
             for user_id in user_list:
-                rmse = Accuracy.rmse(trainset.predict_movies_watched(user_id=user_id, n=n_movies, k=k,
-                                                                     time_constraint=time_constraint))
+                rmse = Accuracy.rmse(self.trainset.predict_movies_watched(user_id=user_id, n=n_movies, k=k,
+                                                                          time_constraint=time_constraint))
                 if rmse != 0:
                     time_constraint_data[year].append((user_id, rmse))
 
         return no_constraint_data, time_constraint_data
 
     def evaluate_max_year_constraint(self, n_users, n_movies, k, time_constraint):
+        """
+        Compare given time_constraint with normal where no constraint exists.
+
+        Time constraint is of type max_year which means the system will be set to a certain year.
+
+        :param n_users: Number of users to evaluate
+        :param n_movies: Number of movies per user to evaluate
+        :param k: Number of neighbours to take into account when making movie prediction
+        :param time_constraint: Time constraint which will be applied.
+        :return: DataFrame of results which contains rmse with constraint and no constraint, as well as runtime.
+        """
         trainset = self.trainset
         data = list()
 
@@ -83,9 +159,29 @@ class Evaluator:
         data.set_index('user_id', inplace=True)
         return data
 
-    def evaluate_time_bins_in_bulk(self, n_users, k=10, min_time_bin_size=2, max_time_bin_size=10):
-        min_year = self.trainset.trainset_user.get_first_timestamp().year
-        max_year = datetime.now().year
+    def evaluate_time_bins_in_bulk(self, n, n_users, k=10,
+                                   min_year=-1,
+                                   max_year=-1,
+                                   min_time_bin_size=2, max_time_bin_size=10):
+        """
+        Evaluate time bins and return the results.
+
+        This method calls 'evaluate_time_bins' method 'n' times. Takes required precautions for bulk calling.
+
+        :param n: Number of runs
+        :param n_users: Number of users
+        :param k: Number of neighbours will be used when making prediction
+        :param min_year: First year to start when taking time bins
+        :param max_year: When to stop when taking time bins, last is not included.
+        :param min_time_bin_size: Minimum bin size in years
+        :param max_time_bin_size: Maximum bin size in years
+        :return: Evaluation results
+        """
+        if min_year == -1:
+            min_year = self.trainset.trainset_user.get_first_timestamp().year
+
+        if max_year == -1:
+            max_year = datetime.now().year
 
         # Cache all years before processing
         time_constraint = TimeConstraint(start_dt=datetime(year=min_year, month=1, day=1),
@@ -95,20 +191,65 @@ class Evaluator:
                                                                         max_year=max_year,
                                                                         min_time_bin_size=min_time_bin_size,
                                                                         max_time_bin_size=max_time_bin_size)
-        self.evaluate_time_bins(n_users=n_users, k=k, min_year=min_year, max_year=max_year,
-                                min_time_bin_size=min_time_bin_size,
-                                max_time_bin_size=max_time_bin_size)
 
-    def evaluate_time_bins(self, n_users, k, min_year, max_year, min_time_bin_size=2, max_time_bin_size=10):
-        trainset = self.trainset
         if n_users > 600:
-            user_list = trainset.trainset_user.get_users()
+            user_list = self.trainset.trainset_user.get_users()
         else:
-            user_list = trainset.trainset_user.get_random_users(n=n_users)
-        user_movie_list = trainset.trainset_movie.get_random_movie_per_user(user_list)
+            user_list = self.trainset.trainset_user.get_random_users(n=n_users)
+        user_movie_list = self.trainset.trainset_movie.get_random_movie_per_user(user_list)
+
+        run_results = dict()
+        for i in range(n):
+            run_results[i] = self.evaluate_time_bins(n_users=n_users, k=k, min_year=min_year, max_year=max_year,
+                                                     min_time_bin_size=min_time_bin_size,
+                                                     max_time_bin_size=max_time_bin_size,
+                                                     user_movie_list=user_movie_list,
+                                                     create_cache=False)
+
+        return run_results
+
+    def evaluate_time_bins(self, n_users, k, min_year=-1, max_year=-1,
+                           min_time_bin_size=2, max_time_bin_size=10,
+                           user_movie_list=(), create_cache=True) -> dict:
+        """
+
+        :param n_users: Number of users
+        :param k: Number of neighbours will be used when making prediction
+        :param min_year: First year to start when taking time bins
+        :param max_year: When to stop when taking time bins, last is not included.
+        :param min_time_bin_size: Minimum bin size in years
+        :param max_time_bin_size: Maximum bin size in years
+        :param user_movie_list: User supplied user_movie list. For bulk callers.
+        :param create_cache: Create cache before calling time bins. For bulk callers.
+        :return:
+        """
+        trainset = self.trainset
+
+        if min_year == -1:
+            min_year = self.trainset.trainset_user.get_first_timestamp().year
+
+        if max_year == -1:
+            max_year = datetime.now().year
+
+        if not user_movie_list:
+            if n_users > 600:
+                user_list = trainset.trainset_user.get_users()
+            else:
+                user_list = trainset.trainset_user.get_random_users(n=n_users)
+            user_movie_list = trainset.trainset_movie.get_random_movie_per_user(user_list)
         data = {"n_users": n_users, "k_neighbours": k}
 
         result = list()
+
+        if create_cache:
+            # Cache all years before processing
+            time_constraint = TimeConstraint(start_dt=datetime(year=min_year, month=1, day=1),
+                                             end_dt=datetime(year=max_year, month=1, day=1))
+            self.trainset.similarity.cache_user_corrs_in_bulk_for_time_bins(time_constraint,
+                                                                            min_year=min_year,
+                                                                            max_year=max_year,
+                                                                            min_time_bin_size=min_time_bin_size,
+                                                                            max_time_bin_size=max_time_bin_size)
 
         # Take each bins where first bin 'min_time_bin_size' years, last one 'max_time_bin_size - 1' years
         for time_bin_size in range(min_time_bin_size, max_time_bin_size):
@@ -136,7 +277,8 @@ class Evaluator:
                                      "start_year": min_year + shift,
                                      "predictions": predictions,
                                      "rmse": bin_rmse,
-                                     "runtime": runtime}
+                                     "runtime": runtime
+                                     }
                 result.append(iteration_results)
 
         data['result'] = result
