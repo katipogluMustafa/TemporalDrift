@@ -16,7 +16,7 @@ class Evaluator:
     def evaluate_best_max_year_in_bulk(self, n,
                                        n_users, n_movies, k=10,
                                        min_year=-1,
-                                       max_year=-1) -> tuple:
+                                       max_year=-1) -> dict:
         """
         Evaluate and collect data about best max year constraint which can be put instead of no constraint.
 
@@ -60,26 +60,30 @@ class Evaluator:
                                                                     min_year=min_year, max_year=max_year,
                                                                     user_list=user_list,
                                                                     create_cache=False,
-                                                                    calculate_no_const=False)
+                                                                    no_constraint_data=no_constraint_data)
 
-        return no_constraint_data, run_results
+        return run_results
 
     def evaluate_best_max_year_constraint(self, n_users, n_movies, k,
-                                          min_year=-1, max_year=-1, user_list=(),
-                                          calculate_no_const=True,
-                                          create_cache=True) -> tuple:
+                                          max_diff=0.1,
+                                          min_year=-1, max_year=-1,
+                                          user_list=(),
+                                          no_constraint_data={},
+                                          create_cache=True) -> defaultdict:
         """
         Evaluate the max_year constraint for evaluate_max_year_constraint method.
 
+        :param max_diff: maximum difference between rmse when no constraint and with given year constraint.
         :param n_users: Number of users to evaluate
         :param n_movies: Number of movies per user to evaluate
         :param k: Number of neighbours of each user to take into account when making prediction
         :param min_year: First year to evaluate
         :param max_year: Last year to evaluate
         :param user_list: User supplied user list
-        :param calculate_no_const: do not calculate no constraint result. For bulk callers.
+        :param no_constraint_data: user supplied rmse for each user in user_list when no constraint applied
         :param create_cache: create cache before running. For bulk callers.
-        :return: Evaluation results in tuple, where first one no constraint result, second with constraint
+        :return: Votes for years where each year got its vote
+                 when rmse is less than 'max_diff' in between no constraint and year constraint
         """
 
         if min_year == -1:
@@ -94,8 +98,7 @@ class Evaluator:
             else:
                 user_list = self.trainset.trainset_user.get_random_users(n=n_users)  # Select random n users
 
-        no_constraint_data = dict()
-        if calculate_no_const:
+        if not no_constraint_data:
             # Calculate RMSE With No Constraint
             for user_id in user_list:
                 rmse = Accuracy.rmse(self.trainset.predict_movies_watched(user_id, n_movies, k))
@@ -104,24 +107,24 @@ class Evaluator:
         # # Calculate RMSE With Time Constraint
 
         # Cache all years before processing
-        time_constraint_data = defaultdict(list)
         time_constraint = TimeConstraint(end_dt=datetime(year=min_year, month=1, day=1))
         # Create cache if bulk_corr_cache is allowed
         if create_cache:
             self.trainset.similarity.cache_user_corrs_in_bulk_for_max_limit(time_constraint,
                                                                             min_year=min_year,
                                                                             max_year=max_year)
-
+        # Votes to years is stored inside time_constraint_data
+        time_constraint_data = defaultdict(int)
         for year in range(min_year, max_year):
             time_constraint.end_dt = time_constraint.end_dt.replace(year=year)
 
             for user_id in user_list:
                 rmse = Accuracy.rmse(self.trainset.predict_movies_watched(user_id=user_id, n=n_movies, k=k,
                                                                           time_constraint=time_constraint))
-                if rmse != 0:
-                    time_constraint_data[year].append((user_id, rmse))
+                if abs(rmse - no_constraint_data[user_id]) < max_diff:
+                    time_constraint_data[year] += 1
 
-        return no_constraint_data, time_constraint_data
+        return time_constraint_data
 
     def evaluate_max_year_constraint(self, n_users, n_movies, k, time_constraint):
         """
