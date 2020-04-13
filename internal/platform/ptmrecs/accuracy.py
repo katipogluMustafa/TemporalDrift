@@ -32,6 +32,6 @@ class Accuracy:
                     sum_of_square_differences += (actual - prediction) ** 2
                     number_of_predictions += 1
             return sum_of_square_differences / number_of_predictions if number_of_predictions != 0 else 0
-
+        return 0
 
 
