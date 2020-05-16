@@ -2,12 +2,12 @@ class TimeConstraint:
 
     def __init__(self, end_dt, start_dt=None):
         """
-        When end_dt is only given, system will have a max time constraint only.
+        When end_dt is only given, TimeConstraint will be of type max limit.
 
-        When end_dt and start_dt are given, system will have beginning end ending boundary.
+        When start_dt and end_dt are given, TimeConstraint will be of type time bin.
 
-        :param end_dt: The maximum limit of the time constraint.
-        :param start_dt: The minimum limit of the time constraint.
+        :param end_dt: The end time.
+        :param start_dt: The start time.
             Always set start_dt to None if you change the object from time_bin to max_limit.
         """
         self.end_dt = end_dt
@@ -23,12 +23,15 @@ class TimeConstraint:
 
     def is_valid_max_limit(self) -> bool:
         """
-        Check whether this TimeConstraint represents a valid max time limit.
+        Check whether the object is of max time limit type.
         """
         if (self._end_dt is not None) and (self._start_dt is None):
             return True
 
     def is_time_bin(self) -> bool:
+        """
+        Check whether the object is of time bin type. 
+        """
         if (self._start_dt is not None) and (self._end_dt is not None):
             return True
         return False

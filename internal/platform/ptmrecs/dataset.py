@@ -20,6 +20,7 @@ class MovieLensDataset(Dataset):
                  is_ratings_cached=True,
                  is_movies_cached=True):
         Dataset.__init__(self)
+        # In case we dont want to use Cache class, we can cache movies and ratings here as well.
         self.is_ratings_cached = is_ratings_cached
         self.is_movies_cached = is_movies_cached
         self.ratings = MovieLensDataset.load_ratings(ratings_path,
@@ -30,8 +31,6 @@ class MovieLensDataset(Dataset):
     @staticmethod
     def load_movies(movies_path,
                     movies_col_names=('item_id', 'title', 'genres')):
-        """ Load movies from given path """
-
         if not os.path.isfile(movies_path) or not movies_col_names:
             return None
 
@@ -51,7 +50,6 @@ class MovieLensDataset(Dataset):
     @staticmethod
     def load_ratings(ratings_path,
                      ratings_col_names=('user_id', 'item_id', 'rating', 'timestamp')):
-        """ Load ratings from given path"""
         if not os.path.isfile(ratings_path) or not ratings_col_names:
             return None
 
@@ -65,7 +63,6 @@ class MovieLensDataset(Dataset):
 
     @staticmethod
     def create_movie_ratings(ratings, movies):
-        """ Merge given ratings and movies"""
         return pd.merge(ratings, movies, on='item_id')
 
     @staticmethod
@@ -73,11 +70,7 @@ class MovieLensDataset(Dataset):
              ratings_path=r'C:\Users\Yukawa\datasets\ml-latest-small\ratings.csv',
              movies_col_names=('item_id', 'title', 'genres'),
              movies_path=r'C:\Users\Yukawa\datasets\ml-latest-small\movies.csv'
-             ) -> pd.DataFrame:
-        """
-        Load data set in case it consists of two files as ratings and movies
-        :return movie_ratings: merged movies and ratings files.
-        """
+             ):
         # Load movies
         movies = MovieLensDataset.load_movies(movies_path=movies_path, movies_col_names=movies_col_names)
         # Load ratings
@@ -87,8 +80,3 @@ class MovieLensDataset(Dataset):
         movie_ratings = pd.merge(ratings, movies, on='item_id')
 
         return movie_ratings
-
-
-# #Unit Test
-# movies_ratings = MovieLensDataset.load()
-# print(movies_ratings)

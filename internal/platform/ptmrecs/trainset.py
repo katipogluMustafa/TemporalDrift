@@ -37,7 +37,7 @@ class TrainsetUser:
 
     def get_active_users(self, n=10) -> pd.DataFrame:
         """
-        Get Users in sorted order where the first one is the one who has given most ratings.
+        Get users in sorted order where the first one is the one who has given most ratings.
 
         :param n: Number of users to retrieve.
         :return: user DataFrame with index of 'user_id' and columns of ['mean_rating', 'No_of_ratings'] .
@@ -311,7 +311,7 @@ class Trainset:
                                                            self.get_k_neighbours(user_id, k=k,
                                                                                  time_constraint=time_constraint,
                                                                                  bin_size=bin_size)
-                                                           )
+                                                           )        
         return prediction if prediction <= 5 else 5
 
     def get_k_neighbours(self, user_id, k=20, time_constraint: TimeConstraint = None, bin_size=-1):
@@ -349,5 +349,3 @@ class Trainset:
         # Eliminate Correlation to itself by deleting first row,
         #     since biggest corr is with itself it is in first row
         return users_alike.iloc[1:k+1]
-
-
