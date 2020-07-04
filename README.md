@@ -1,4 +1,4 @@
-# RecSysEvaluator
+# Temporal Drift of User Ratings on Recommender Systems
 
-GUI Recommendation System Evaluator
+* Last stable version is the v8.
 
