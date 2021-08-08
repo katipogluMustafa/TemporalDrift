@@ -2,8 +2,6 @@
 
 This repository contains notebooks that we have created during the research of temporal drift of user ratings on recommerder systems.
 
-* Last stable version is the v8.
-
 ## Further Development
 
 Latest version of the temporal drift research defines a basic framework for recommender systems. 
